@@ -1,0 +1,393 @@
+{
+  "info": {
+    "_postman_id": "bibliothec-v1-collection",
+    "name": "Bibliothec API v1 — Parcours complet",
+    "description": "Test de bout en bout : admin publie un livre → client achète (Pawapay sandbox) → lecture en ligne.\n\nVariables auto-remplies : accessToken, categorieId, livreId, achatId, lectureToken.\n\nPrérequis : API sur http://localhost:3000, PostgreSQL, Cloudinary configuré, PAWAPAY_MODE=sandbox + token dans .env",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userToken", "value": "" },
+    { "key": "categorieId", "value": "" },
+    { "key": "livreId", "value": "" },
+    { "key": "achatId", "value": "" },
+    { "key": "lectureToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "A — Admin : créer le livre",
+      "description": "Exécuter dans l'ordre 1 → 4. Utilise le token admin.",
+      "item": [
+        {
+          "name": "A1 — Connexion admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@ecrivain.local\",\n  \"motDePasse\": \"Admin123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/connexion"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Connexion OK', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', j.accessToken);",
+                  "pm.collectionVariables.set('adminToken', j.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A2 — Créer catégorie",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Roman\",\n  \"description\": \"Romans et fictions\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/categories"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Catégorie créée', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('categorieId', j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A3 — Publier livre (PDF obligatoire)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "titre", "value": "Les rives du silence", "type": "text" },
+                { "key": "resume", "value": "Un roman d'aventures au Burkina Faso.", "type": "text" },
+                { "key": "prix", "value": "2500", "type": "text" },
+                { "key": "devise", "value": "XAF", "type": "text" },
+                { "key": "format", "value": "PDF", "type": "text" },
+                { "key": "statut", "value": "PUBLIE", "type": "text" },
+                { "key": "categorieId", "value": "{{categorieId}}", "type": "text" },
+                { "key": "nombrePages", "value": "120", "type": "text" },
+                { "key": "anneePublication", "value": "2026", "type": "text" },
+                { "key": "fichier", "description": "Choisir un fichier .pdf", "type": "file", "src": [] },
+                { "key": "couverture", "description": "Optionnel : image jpg/png", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/admin/livres"
+          },
+          "description": "Onglet Body → form-data : cliquez sur « fichier » et sélectionnez un PDF sur votre PC.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Livre publié', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('livreId', j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A4 — Vérifier livre dans le catalogue public",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/livres/{{livreId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Livre visible', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Pas de fichierUrl exposé', () => pm.expect(j.fichierUrl).to.be.undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A5 — Stats admin (optionnel)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/stats"
+          }
+        }
+      ]
+    },
+    {
+      "name": "B0 — Opérateurs Congo (public)",
+      "item": [
+        {
+          "name": "Liste opérateurs MTN / Airtel",
+          "request": { "method": "GET", "url": "{{baseUrl}}/pawapay/operateurs" }
+        }
+      ]
+    },
+    {
+      "name": "B — Client : inscription & catalogue",
+      "description": "Compte acheteur. Pas besoin du token admin.",
+      "item": [
+        {
+          "name": "B1 — Inscription client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Dupont\",\n  \"prenom\": \"Marie\",\n  \"email\": \"marie.test@example.com\",\n  \"motDePasse\": \"Motdepasse123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/inscription"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  pm.collectionVariables.set('userToken', j.accessToken);",
+                  "  pm.collectionVariables.set('accessToken', j.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B2 — Connexion client (si déjà inscrit)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marie.test@example.com\",\n  \"motDePasse\": \"Motdepasse123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/connexion"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('userToken', j.accessToken);",
+                  "pm.collectionVariables.set('accessToken', j.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B3 — Mon profil",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/auth/moi"
+          }
+        },
+        {
+          "name": "B4 — Liste catégories (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/categories" }
+        },
+        {
+          "name": "B5 — Catalogue livres (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/livres?page=1&limit=20" }
+        },
+        {
+          "name": "B6 — Détail livre (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/livres/{{livreId}}" }
+        }
+      ]
+    },
+    {
+      "name": "C — Client : achat Pawapay sandbox",
+      "description": "PAWAPAY_MODE=sandbox. En sandbox le paiement se valide souvent sans action téléphone ; le callback met à jour l'achat. Sinon refaire C2 après quelques secondes.",
+      "item": [
+        {
+          "name": "C1 — Initier achat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"livreId\": \"{{livreId}}\",\n  \"numeroTelephone\": \"242063456789\",\n  \"operateur\": \"MTN_MOMO_COG\"\n}"
+            },
+            "url": "{{baseUrl}}/achats"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Achat initié', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const j = pm.response.json();",
+                  "if (j.achatId) pm.collectionVariables.set('achatId', j.achatId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C2 — Statut achat (polling)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/achats/{{achatId}}"
+          },
+          "description": "Relancez jusqu'à statut SUCCES. En sandbox Pawapay peut mettre quelques secondes."
+        },
+        {
+          "name": "C3 — Ma bibliothèque",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/achats/bibliotheque"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Bibliothèque OK', () => pm.response.to.have.status(200));",
+                  "const arr = pm.response.json();",
+                  "pm.test('Au moins un livre', () => pm.expect(arr.length).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C4 — Callback dépôt (test manuel)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"{{achatId}}\",\n  \"status\": \"COMPLETED\",\n  \"providerTransactionId\": \"test-manual-001\"\n}"
+            },
+            "url": "{{baseUrl}}/webhooks/pawapay/deposits"
+          },
+          "description": "Uniquement si C2 reste EN_ATTENTE : simule le callback Pawapay."
+        },
+        {
+          "name": "C5 — Confirmer simulation (PAWAPAY_MODE=simulate only)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/achats/{{achatId}}/confirmer-simulation"
+          },
+          "description": "Ignorer en mode sandbox."
+        }
+      ]
+    },
+    {
+      "name": "D — Client : lecture en ligne",
+      "item": [
+        {
+          "name": "D1 — Générer lien de lecture",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/lecture/achats/{{achatId}}/lien"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.token) pm.collectionVariables.set('lectureToken', j.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D2 — Obtenir URL de lecture signée",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/lecture/acces/{{lectureToken}}"
+          },
+          "description": "Copiez lectureUrl dans le navigateur pour ouvrir le PDF (lecture, pas téléchargement direct)."
+        }
+      ]
+    },
+    {
+      "name": "E — Admin : suivi (optionnel)",
+      "item": [
+        {
+          "name": "E1 — Liste achats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/achats"
+          }
+        },
+        {
+          "name": "E2 — Liste utilisateurs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/utilisateurs"
+          }
+        },
+        {
+          "name": "E3 — Liste livres admin",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/livres"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Z — Auth divers",
+      "item": [
+        {
+          "name": "Changer mot de passe (connecté)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ancienMotDePasse\": \"Motdepasse123!\",\n  \"nouveauMotDePasse\": \"NouveauMotdepasse123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/mot-de-passe"
+          }
+        }
+      ]
+    }
+  ]
+}

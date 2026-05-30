@@ -1,0 +1,140 @@
+// Bibliothèque numérique — un écrivain, achat à l'unité, lecture via lien temporaire
+// Soft delete sur toutes les entités (deletedAt)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum LivreFormat {
+  PDF
+  EPUB
+  MOBI
+}
+
+enum LivreStatut {
+  PUBLIE
+  ARCHIVE
+}
+
+enum AchatStatut {
+  EN_ATTENTE
+  SUCCES
+  ECHEC
+}
+
+model Utilisateur {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nom               String    @db.VarChar(100)
+  prenom            String    @db.VarChar(100)
+  email             String    @unique @db.VarChar(255)
+  motDePasseHash    String    @map("mot_de_passe_hash") @db.VarChar(255)
+  role              Role      @default(USER)
+  derniereConnexion DateTime? @map("derniere_connexion")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  achats       Achat[]
+  liensLecture LienLecture[]
+
+  @@index([email])
+  @@map("utilisateur")
+}
+
+model Categorie {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nom         String    @unique @db.VarChar(100)
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  livres Livre[]
+
+  @@map("categorie")
+}
+
+model Livre {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titre            String      @db.VarChar(300)
+  auteur           String?     @db.VarChar(200)
+  resume           String?
+  couvertureUrl    String?     @map("couverture_url") @db.VarChar(500)
+  fichierUrl       String      @map("fichier_url") @db.VarChar(1000)
+  fichierPublicId  String?     @map("fichier_public_id") @db.VarChar(500)
+  format           LivreFormat @default(PDF)
+  prix             Decimal     @db.Decimal(10, 2)
+  devise           String      @default("XAF") @db.VarChar(10)
+  nombrePages      Int?        @map("nombre_pages")
+  anneePublication Int?        @map("annee_publication")
+  categorieId      String?     @map("categorie_id") @db.Uuid
+  statut           LivreStatut @default(PUBLIE)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  deletedAt        DateTime?   @map("deleted_at")
+
+  categorie      Categorie?     @relation(fields: [categorieId], references: [id], onDelete: SetNull)
+  achats         Achat[]
+  liensLecture   LienLecture[]
+
+  @@index([statut])
+  @@index([titre])
+  @@index([categorieId])
+  @@index([prix])
+  @@map("livre")
+}
+
+model Achat {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId    String      @map("utilisateur_id") @db.Uuid
+  livreId          String      @map("livre_id") @db.Uuid
+  montant          Decimal     @db.Decimal(10, 2)
+  devise           String      @default("XAF") @db.VarChar(10)
+  operateur        String      @db.VarChar(50)
+  numeroTelephone  String?     @map("numero_telephone") @db.VarChar(20)
+  refTransaction   String?     @unique @map("ref_transaction") @db.VarChar(200)
+  statut           AchatStatut @default(EN_ATTENTE)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  deletedAt        DateTime?   @map("deleted_at")
+
+  utilisateur  Utilisateur   @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
+  livre        Livre         @relation(fields: [livreId], references: [id], onDelete: Restrict)
+  liensLecture LienLecture[]
+
+  @@index([utilisateurId])
+  @@index([statut])
+  @@index([utilisateurId, livreId])
+  @@index([refTransaction])
+  @@map("achat")
+}
+
+/// Lien temporaire pour lire le livre en ligne (pas de téléchargement direct)
+model LienLecture {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  achatId       String    @map("achat_id") @db.Uuid
+  utilisateurId String    @map("utilisateur_id") @db.Uuid
+  livreId       String    @map("livre_id") @db.Uuid
+  token         String    @unique @db.VarChar(500)
+  expiresAt     DateTime  @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  achat       Achat       @relation(fields: [achatId], references: [id], onDelete: Cascade)
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  livre       Livre       @relation(fields: [livreId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([achatId])
+  @@index([expiresAt])
+  @@map("lien_lecture")
+}
