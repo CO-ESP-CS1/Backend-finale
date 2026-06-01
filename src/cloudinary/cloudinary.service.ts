@@ -85,6 +85,36 @@ export class CloudinaryService implements OnModuleInit {
     });
   }
 
+  /** Preuve de paiement (image ou PDF), dossier dédié. */
+  async uploadPreuve(buffer: Buffer, filename: string, mimeType: string) {
+    const cloudName = this.config.get<string>('CLOUDINARY_CLOUD_NAME');
+    if (!cloudName) {
+      throw new Error('CLOUDINARY_CLOUD_NAME manquant');
+    }
+
+    const isPdf =
+      mimeType === 'application/pdf' ||
+      filename.toLowerCase().endsWith('.pdf');
+
+    return new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: isPdf ? 'raw' : 'image',
+          folder: 'bibliothec/preuves-paiement',
+          public_id: sanitizePublicId(filename),
+        },
+        (err, result) => {
+          if (err || !result) return reject(err ?? new Error('Upload échoué'));
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+          });
+        },
+      );
+      stream.end(buffer);
+    });
+  }
+
   /** URL signée pour lecture en ligne (dernière version de l’asset, sans v1 forcé). */
   urlLectureSignee(publicId: string): string {
     return cloudinary.url(publicId, {

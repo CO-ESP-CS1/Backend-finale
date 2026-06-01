@@ -25,10 +25,23 @@ enum LivreStatut {
   ARCHIVE
 }
 
+enum TypePaiement {
+  INTERNE
+  EXTERNE
+}
+
 enum AchatStatut {
   EN_ATTENTE
+  PAIEMENT_SOUMIS
   SUCCES
   ECHEC
+}
+
+enum NotificationType {
+  PAIEMENT_SOUMIS
+  PAIEMENT_VALIDE
+  PAIEMENT_REFUSE
+  COMPTE_SUPPRIME
 }
 
 model Utilisateur {
@@ -39,12 +52,18 @@ model Utilisateur {
   motDePasseHash    String    @map("mot_de_passe_hash") @db.VarChar(255)
   role              Role      @default(USER)
   derniereConnexion DateTime? @map("derniere_connexion")
+  loginFailedAttempts Int       @default(0) @map("login_failed_attempts")
+  loginLockedUntil    DateTime? @map("login_locked_until")
+  loginLockoutTier    Int       @default(0) @map("login_lockout_tier")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")
+  motifSuppression  String?   @map("motif_suppression") @db.VarChar(500)
+  emailSupprime     String?   @map("email_supprime") @db.VarChar(255)
 
-  achats       Achat[]
-  liensLecture LienLecture[]
+  achats        Achat[]
+  liensLecture  LienLecture[]
+  notifications Notification[]
 
   @@index([email])
   @@map("utilisateur")
@@ -82,9 +101,9 @@ model Livre {
   updatedAt        DateTime    @updatedAt @map("updated_at")
   deletedAt        DateTime?   @map("deleted_at")
 
-  categorie      Categorie?     @relation(fields: [categorieId], references: [id], onDelete: SetNull)
-  achats         Achat[]
-  liensLecture   LienLecture[]
+  categorie    Categorie?    @relation(fields: [categorieId], references: [id], onDelete: SetNull)
+  achats       Achat[]
+  liensLecture LienLecture[]
 
   @@index([statut])
   @@index([titre])
@@ -94,28 +113,73 @@ model Livre {
 }
 
 model Achat {
-  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  utilisateurId    String      @map("utilisateur_id") @db.Uuid
-  livreId          String      @map("livre_id") @db.Uuid
-  montant          Decimal     @db.Decimal(10, 2)
-  devise           String      @default("XAF") @db.VarChar(10)
-  operateur        String      @db.VarChar(50)
-  numeroTelephone  String?     @map("numero_telephone") @db.VarChar(20)
-  refTransaction   String?     @unique @map("ref_transaction") @db.VarChar(200)
-  statut           AchatStatut @default(EN_ATTENTE)
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
-  deletedAt        DateTime?   @map("deleted_at")
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId   String       @map("utilisateur_id") @db.Uuid
+  livreId         String       @map("livre_id") @db.Uuid
+  montant         Decimal      @db.Decimal(10, 2)
+  devise          String       @default("XAF") @db.VarChar(10)
+  typePaiement    TypePaiement @default(INTERNE) @map("type_paiement")
+  operateur       String       @db.VarChar(50)
+  numeroTelephone String?      @map("numero_telephone") @db.VarChar(20)
+  refTransaction  String?      @unique @map("ref_transaction") @db.VarChar(200)
+  statut          AchatStatut  @default(EN_ATTENTE)
+  motifRefus      String?      @map("motif_refus") @db.VarChar(500)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
 
-  utilisateur  Utilisateur   @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
-  livre        Livre         @relation(fields: [livreId], references: [id], onDelete: Restrict)
-  liensLecture LienLecture[]
+  utilisateur        Utilisateur         @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
+  livre              Livre               @relation(fields: [livreId], references: [id], onDelete: Restrict)
+  liensLecture       LienLecture[]
+  soumissionPaiement SoumissionPaiement?
+  notifications      Notification[]
 
   @@index([utilisateurId])
   @@index([statut])
+  @@index([typePaiement])
   @@index([utilisateurId, livreId])
   @@index([refTransaction])
   @@map("achat")
+}
+
+/// Déclaration client + preuves pour paiement international manuel
+model SoumissionPaiement {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  achatId          String   @unique @map("achat_id") @db.Uuid
+  refTransaction   String   @map("ref_transaction") @db.VarChar(200)
+  nomBanque        String   @map("nom_banque") @db.VarChar(200)
+  montantDeclare   Decimal  @map("montant_declare") @db.Decimal(12, 2)
+  deviseDeclare    String   @map("devise_declare") @db.VarChar(10)
+  datePaiement     DateTime @map("date_paiement")
+  preuveUrl1       String   @map("preuve_url_1") @db.VarChar(500)
+  preuveUrl2       String?  @map("preuve_url_2") @db.VarChar(500)
+  preuvePublicId1  String   @map("preuve_public_id_1") @db.VarChar(500)
+  preuvePublicId2  String?  @map("preuve_public_id_2") @db.VarChar(500)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  achat Achat @relation(fields: [achatId], references: [id], onDelete: Cascade)
+
+  @@map("soumission_paiement")
+}
+
+model Notification {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId String           @map("utilisateur_id") @db.Uuid
+  type          NotificationType
+  titre         String           @db.VarChar(200)
+  message       String
+  lien          String?          @db.VarChar(500)
+  achatId       String?          @map("achat_id") @db.Uuid
+  lu            Boolean          @default(false)
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  achat       Achat?      @relation(fields: [achatId], references: [id], onDelete: SetNull)
+
+  @@index([utilisateurId, lu])
+  @@index([createdAt])
+  @@map("notification")
 }
 
 /// Lien temporaire pour lire le livre en ligne (pas de téléchargement direct)

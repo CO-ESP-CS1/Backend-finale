@@ -8,6 +8,7 @@ import { AchatsModule } from './achats/achats.module';
 import { PawapayModule } from './pawapay/pawapay.module';
 import { LectureModule } from './lecture/lecture.module';
 import { AdminModule } from './admin/admin.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AppBootstrapService } from './app-bootstrap.service';
 
 @Module({
@@ -21,6 +22,7 @@ import { AppBootstrapService } from './app-bootstrap.service';
     PawapayModule,
     LectureModule,
     AdminModule,
+    NotificationsModule,
   ],
   providers: [AppBootstrapService],
 })

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { LivreStatut, Prisma } from '@prisma/client';
+import { filterLivresBySearch } from '../common/search.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { actif } from '../common/soft-delete';
 
@@ -34,15 +35,35 @@ export class LivresService {
     const page = params?.page ?? 1;
     const limit = Math.min(params?.limit ?? 20, 50);
     const skip = (page - 1) * limit;
+    const recherche = params?.recherche?.trim();
 
-    const where: Prisma.LivreWhereInput = {
+    const baseWhere: Prisma.LivreWhereInput = {
       ...actif,
       statut: LivreStatut.PUBLIE,
       ...(params?.categorieId && { categorieId: params.categorieId }),
-      ...(params?.recherche && {
-        titre: { contains: params.recherche, mode: 'insensitive' },
-      }),
     };
+
+    if (recherche) {
+      const all = await this.prisma.livre.findMany({
+        where: baseWhere,
+        select: livrePublicSelect,
+        orderBy: { createdAt: 'desc' },
+      });
+      const filtered = filterLivresBySearch(all, recherche);
+      const paginated = filtered.slice(skip, skip + limit);
+
+      return {
+        data: paginated.map((l) => this.formatLivre(l)),
+        pagination: {
+          page,
+          limit,
+          total: filtered.length,
+          pages: Math.ceil(filtered.length / limit) || 1,
+        },
+      };
+    }
+
+    const where: Prisma.LivreWhereInput = baseWhere;
 
     const [livres, total] = await Promise.all([
       this.prisma.livre.findMany({

@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { InscriptionDto } from './dto/inscription.dto';
 import { ConnexionDto } from './dto/connexion.dto';
 import { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
+import { SupprimerCompteDto } from './dto/supprimer-compte.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -33,5 +34,14 @@ export class AuthController {
     @Body() dto: ChangerMotDePasseDto,
   ) {
     return this.auth.changerMotDePasse(user.sub, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('compte')
+  supprimerCompte(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: SupprimerCompteDto,
+  ) {
+    return this.auth.supprimerCompte(user.sub, dto);
   }
 }

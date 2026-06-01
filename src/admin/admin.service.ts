@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { LivreStatut, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -75,17 +75,27 @@ export class AdminService {
   }
 
   listerAchats() {
-    return this.prisma.achat.findMany({
-      where: actif,
-      include: {
-        utilisateur: {
-          select: { email: true, nom: true, prenom: true },
+    return this.prisma.achat
+      .findMany({
+        where: actif,
+        include: {
+          utilisateur: {
+            select: { id: true, email: true, nom: true, prenom: true },
+          },
+          livre: { select: { id: true, titre: true } },
+          soumissionPaiement: {
+            select: { id: true, createdAt: true },
+          },
         },
-        livre: { select: { titre: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+      .then((achats) =>
+        achats.map((a) => ({
+          ...a,
+          montant: Number(a.montant),
+        })),
+      );
   }
 
   async creerLivre(
@@ -165,24 +175,55 @@ export class AdminService {
     return { message: 'Livre archivé (soft delete)' };
   }
 
+  async desarchiverLivre(id: string) {
+    const livre = await this.prisma.livre.findFirst({ where: { id } });
+    if (!livre) throw new NotFoundException('Livre introuvable');
+    if (livre.deletedAt === null && livre.statut !== LivreStatut.ARCHIVE) {
+      throw new BadRequestException("Ce livre n'est pas archivé");
+    }
+
+    const updated = await this.prisma.livre.update({
+      where: { id },
+      data: { deletedAt: null, statut: LivreStatut.PUBLIE },
+      select: {
+        id: true,
+        titre: true,
+        statut: true,
+      },
+    });
+    return { message: 'Livre republié dans le catalogue', livre: updated };
+  }
+
   creerCategorie(dto: CreerCategorieDto) {
     return this.prisma.categorie.create({ data: dto });
   }
 
   listerLivresAdmin() {
-    return this.prisma.livre.findMany({
-      where: actif,
-      select: {
-        id: true,
-        titre: true,
-        prix: true,
-        statut: true,
-        format: true,
-        createdAt: true,
-        _count: { select: { achats: { where: { statut: 'SUCCES', ...actif } } } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.livre
+      .findMany({
+        select: {
+          id: true,
+          titre: true,
+          prix: true,
+          devise: true,
+          statut: true,
+          format: true,
+          couvertureUrl: true,
+          createdAt: true,
+          deletedAt: true,
+          categorie: { select: { id: true, nom: true } },
+          _count: {
+            select: { achats: { where: { statut: 'SUCCES', ...actif } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((livres) =>
+        livres.map((l) => ({
+          ...l,
+          prix: Number(l.prix),
+        })),
+      );
   }
 
   /** Crée l’admin initial si absent (seed). */
