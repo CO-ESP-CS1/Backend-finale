@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { LivreStatut, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,6 +14,8 @@ import { CreerCategorieDto } from './dto/creer-categorie.dto';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
@@ -103,46 +110,59 @@ export class AdminService {
     fichier: Express.Multer.File,
     couverture?: Express.Multer.File,
   ) {
-    const upload = await this.cloudinary.uploadPdf(
-      fichier.buffer,
-      fichier.originalname,
-    );
-
-    let couvertureUrl: string | undefined;
-    if (couverture) {
-      const img = await this.cloudinary.uploadImage(
-        couverture.buffer,
-        couverture.originalname,
+    try {
+      const upload = await this.cloudinary.uploadPdf(
+        fichier.buffer,
+        fichier.originalname,
       );
-      couvertureUrl = img.url;
+
+      let couvertureUrl: string | undefined;
+      if (couverture) {
+        const img = await this.cloudinary.uploadImage(
+          couverture.buffer,
+          couverture.originalname,
+        );
+        couvertureUrl = img.url;
+      }
+
+      const livre = await this.prisma.livre.create({
+        data: {
+          titre: dto.titre,
+          auteur: dto.auteur || null,
+          resume: dto.resume,
+          prix: dto.prix,
+          devise: dto.devise ?? 'XAF',
+          format: dto.format ?? 'PDF',
+          categorieId: dto.categorieId,
+          nombrePages: dto.nombrePages,
+          anneePublication: dto.anneePublication,
+          statut: dto.statut ?? LivreStatut.PUBLIE,
+          fichierUrl: upload.secureUrl,
+          fichierPublicId: upload.publicId,
+          couvertureUrl,
+        },
+        select: {
+          id: true,
+          titre: true,
+          prix: true,
+          statut: true,
+          couvertureUrl: true,
+        },
+      });
+
+      return { ...livre, prix: Number(livre.prix) };
+    } catch (err) {
+      this.logger.error(
+        `Échec création livre « ${dto.titre} » : ${err instanceof Error ? err.message : err}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      if (err instanceof BadRequestException) throw err;
+      const detail =
+        err instanceof Error ? err.message : 'Erreur inconnue';
+      throw new BadRequestException(
+        `Publication impossible : ${detail}. Vérifiez Cloudinary (variables Render) et le format des fichiers.`,
+      );
     }
-
-    const livre = await this.prisma.livre.create({
-      data: {
-        titre: dto.titre,
-        auteur: dto.auteur || null,
-        resume: dto.resume,
-        prix: dto.prix,
-        devise: dto.devise ?? 'XAF',
-        format: dto.format ?? 'PDF',
-        categorieId: dto.categorieId,
-        nombrePages: dto.nombrePages,
-        anneePublication: dto.anneePublication,
-        statut: dto.statut ?? LivreStatut.PUBLIE,
-        fichierUrl: upload.secureUrl,
-        fichierPublicId: upload.publicId,
-        couvertureUrl,
-      },
-      select: {
-        id: true,
-        titre: true,
-        prix: true,
-        statut: true,
-        couvertureUrl: true,
-      },
-    });
-
-    return { ...livre, prix: Number(livre.prix) };
   }
 
   async modifierLivre(id: string, data: Partial<CreerLivreDto>) {

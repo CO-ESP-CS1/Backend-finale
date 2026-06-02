@@ -74,7 +74,7 @@ export class CloudinaryService implements OnModuleInit {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: 'bibliothec/couvertures',
-          public_id: filename.replace(/\.[^.]+$/, ''),
+          public_id: sanitizePublicId(filename),
         },
         (err, result) => {
           if (err || !result) return reject(err ?? new Error('Upload échoué'));
