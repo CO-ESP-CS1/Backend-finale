@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: bibliothec-backend-v1
+    env: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci && npm run render:build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/categories
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 180d
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: PAWAPAY_MODE
+        value: live
+      - key: PAWAPAY_API_URL
+        value: https://api.pawapay.io
+      - key: PAWAPAY_API_TOKEN
+        sync: false
+      - key: PAWAPAY_PUBLIC_BASE_URL
+        sync: false
+      - key: PAWAPAY_DEFAULT_PROVIDER
+        value: MTN_MOMO_COG
+      - key: PAWAPAY_DEFAULT_CURRENCY
+        value: XAF
+      - key: LECTURE_LIEN_DUREE_MINUTES
+        value: 120
+      - key: CLOUDINARY_LECTURE_DUREE_SEC
+        value: 3600
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_MOT_DE_PASSE
+        sync: false
+      - key: BANK_BENEFICIAIRE
+        sync: false
+      - key: BANK_NOM
+        sync: false
+      - key: BANK_IBAN
+        sync: false
+      - key: BANK_BIC_SWIFT
+        sync: false
+      - key: BANK_ADRESSE
+        sync: false
+      - key: BANK_INSTRUCTIONS
+        sync: false
+      - key: BANK_REFERENCE_PREFIX
+        value: BIBLIOTHEC

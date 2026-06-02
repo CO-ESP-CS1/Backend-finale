@@ -15,6 +15,17 @@ npm run start:dev
 
 API : `http://localhost:3000/api`
 
+## Déploiement Render
+
+- Build command : `npm run render:build`
+- Start command : `npm run start:prod`
+- Health check : `/api/categories`
+
+Le fichier `render.yaml` est inclus pour créer le service automatiquement.
+Variables obligatoires a definir sur Render : `DATABASE_URL`, `JWT_SECRET`,
+`CLOUDINARY_*`, `PAWAPAY_API_TOKEN`, `PAWAPAY_PUBLIC_BASE_URL`, `ADMIN_*`,
+et les variables `BANK_*`.
+
 ## Stack
 
 - **NestJS 11** — API REST

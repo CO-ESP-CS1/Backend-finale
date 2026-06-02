@@ -31,6 +31,7 @@ import {
 } from './achats.constants';
 import { coordonneesBancairesFromEnv } from './paiement-externe.config';
 import { DEVISES_INTERNATIONALES } from '../common/constants/devises.constants';
+import { INDICATIFS_PAYS } from '../common/constants/indicatifs-pays.constants';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -54,6 +55,10 @@ export class AchatsService {
 
   devisesSupportees() {
     return { devises: DEVISES_INTERNATIONALES };
+  }
+
+  indicatifsTelephone() {
+    return { indicatifs: INDICATIFS_PAYS };
   }
 
   coordonneesBancaires() {
@@ -261,6 +266,14 @@ export class AchatsService {
       throw new BadRequestException('Date de paiement invalide');
     }
 
+    const hasIndicatif = !!dto.telephoneIndicatif?.trim();
+    const hasNumero = !!dto.telephoneNumero?.trim();
+    if (hasIndicatif !== hasNumero) {
+      throw new BadRequestException(
+        'Indicatif pays et numéro de téléphone doivent être renseignés ensemble',
+      );
+    }
+
     await this.prisma.$transaction([
       this.prisma.soumissionPaiement.create({
         data: {
@@ -274,6 +287,8 @@ export class AchatsService {
           preuvePublicId1: uploads[0].publicId,
           preuveUrl2: uploads[1]?.url,
           preuvePublicId2: uploads[1]?.publicId,
+          telephoneIndicatif: hasIndicatif ? dto.telephoneIndicatif!.trim() : null,
+          telephoneNumero: hasNumero ? dto.telephoneNumero!.trim() : null,
         },
       }),
       this.prisma.achat.update({
@@ -401,6 +416,8 @@ export class AchatsService {
             datePaiement: achat.soumissionPaiement.datePaiement,
             preuveUrl1: achat.soumissionPaiement.preuveUrl1,
             preuveUrl2: achat.soumissionPaiement.preuveUrl2,
+            telephoneIndicatif: achat.soumissionPaiement.telephoneIndicatif,
+            telephoneNumero: achat.soumissionPaiement.telephoneNumero,
             createdAt: achat.soumissionPaiement.createdAt,
           }
         : null,

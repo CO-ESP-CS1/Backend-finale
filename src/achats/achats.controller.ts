@@ -28,6 +28,12 @@ export class AchatsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('meta/indicatifs-telephone')
+  indicatifsTelephone() {
+    return this.achats.indicatifsTelephone();
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('meta/coordonnees-bancaires')
   coordonneesBancaires() {
     return this.achats.coordonneesBancaires();

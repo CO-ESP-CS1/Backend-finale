@@ -155,6 +155,8 @@ model SoumissionPaiement {
   preuveUrl2       String?  @map("preuve_url_2") @db.VarChar(500)
   preuvePublicId1  String   @map("preuve_public_id_1") @db.VarChar(500)
   preuvePublicId2  String?  @map("preuve_public_id_2") @db.VarChar(500)
+  telephoneIndicatif String? @map("telephone_indicatif") @db.VarChar(5)
+  telephoneNumero    String? @map("telephone_numero") @db.VarChar(20)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
