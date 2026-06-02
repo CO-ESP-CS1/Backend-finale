@@ -13,13 +13,14 @@ export class PrismaService
 
   constructor(config: ConfigService) {
     const connectionString = config.getOrThrow<string>('DATABASE_URL');
-    const useSsl =
-      connectionString.includes('supabase.com') ||
-      /sslmode=(require|verify-full|verify-ca)/.test(connectionString);
+    const isSupabase = connectionString.includes('supabase.com');
 
     const pool = new Pool({
       connectionString,
-      ...(useSsl && { ssl: { rejectUnauthorized: false } }),
+      max: isSupabase ? 5 : 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 15_000,
+      ...(isSupabase && { ssl: { rejectUnauthorized: false } }),
     });
     const adapter = new PrismaPg(pool);
     super({ adapter });
