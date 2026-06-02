@@ -13,7 +13,14 @@ export class PrismaService
 
   constructor(config: ConfigService) {
     const connectionString = config.getOrThrow<string>('DATABASE_URL');
-    const pool = new Pool({ connectionString });
+    const useSsl =
+      connectionString.includes('supabase.com') ||
+      /sslmode=(require|verify-full|verify-ca)/.test(connectionString);
+
+    const pool = new Pool({
+      connectionString,
+      ...(useSsl && { ssl: { rejectUnauthorized: false } }),
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
     this.pool = pool;
