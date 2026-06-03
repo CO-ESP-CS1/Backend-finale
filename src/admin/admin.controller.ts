@@ -17,7 +17,9 @@ import { Role } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { AchatsService } from '../achats/achats.service';
 import { CreerLivreDto } from './dto/creer-livre.dto';
+import { ModifierLivreDto } from './dto/modifier-livre.dto';
 import { CreerCategorieDto } from './dto/creer-categorie.dto';
+import { ModifierCategorieDto } from './dto/modifier-categorie.dto';
 import { RefuserPaiementDto } from './dto/refuser-paiement.dto';
 import { RevaliderPaiementDto } from './dto/revalider-paiement.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -85,6 +87,11 @@ export class AdminController {
     return this.admin.listerLivresAdmin();
   }
 
+  @Get('livres/:id')
+  detailLivre(@Param('id', ParseUUIDPipe) id: string) {
+    return this.admin.detailLivreAdmin(id);
+  }
+
   @Post('livres')
   @UseInterceptors(
     FileFieldsInterceptor([
@@ -108,11 +115,27 @@ export class AdminController {
   }
 
   @Patch('livres/:id')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'fichier', maxCount: 1 },
+      { name: 'couverture', maxCount: 1 },
+    ]),
+  )
   modifierLivre(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: Partial<CreerLivreDto>,
+    @Body() dto: ModifierLivreDto,
+    @UploadedFiles()
+    files: {
+      fichier?: Express.Multer.File[];
+      couverture?: Express.Multer.File[];
+    },
   ) {
-    return this.admin.modifierLivre(id, dto);
+    return this.admin.modifierLivre(
+      id,
+      dto,
+      files.fichier?.[0],
+      files.couverture?.[0],
+    );
   }
 
   @Delete('livres/:id')
@@ -128,5 +151,13 @@ export class AdminController {
   @Post('categories')
   creerCategorie(@Body() dto: CreerCategorieDto) {
     return this.admin.creerCategorie(dto);
+  }
+
+  @Patch('categories/:id')
+  modifierCategorie(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ModifierCategorieDto,
+  ) {
+    return this.admin.modifierCategorie(id, dto);
   }
 }

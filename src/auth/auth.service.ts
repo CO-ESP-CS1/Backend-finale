@@ -16,6 +16,7 @@ import { JwtPayload } from './auth.types';
 import { InscriptionDto } from './dto/inscription.dto';
 import { ConnexionDto } from './dto/connexion.dto';
 import { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
+import { ModifierProfilDto } from './dto/modifier-profil.dto';
 import { SupprimerCompteDto } from './dto/supprimer-compte.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -232,6 +233,33 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException();
     return user;
+  }
+
+  async modifierProfil(userId: string, dto: ModifierProfilDto) {
+    const user = await this.prisma.utilisateur.findFirst({
+      where: { id: userId, ...actif },
+    });
+    if (!user) throw new UnauthorizedException();
+
+    const nom = dto.nom.trim();
+    const prenom = dto.prenom.trim();
+    if (!nom || !prenom) {
+      throw new BadRequestException('Le nom et le prénom sont obligatoires');
+    }
+
+    return this.prisma.utilisateur.update({
+      where: { id: userId },
+      data: { nom, prenom },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        role: true,
+        derniereConnexion: true,
+        createdAt: true,
+      },
+    });
   }
 
   private emitToken(user: {

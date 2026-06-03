@@ -10,7 +10,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { actif } from '../common/soft-delete';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreerLivreDto } from './dto/creer-livre.dto';
+import { ModifierLivreDto } from './dto/modifier-livre.dto';
 import { CreerCategorieDto } from './dto/creer-categorie.dto';
+import { ModifierCategorieDto } from './dto/modifier-categorie.dto';
 
 @Injectable()
 export class AdminService {
@@ -165,26 +167,100 @@ export class AdminService {
     }
   }
 
-  async modifierLivre(id: string, data: Partial<CreerLivreDto>) {
+  async detailLivreAdmin(id: string) {
     const livre = await this.prisma.livre.findFirst({
-      where: { id, ...actif },
-    });
-    if (!livre) throw new NotFoundException('Livre introuvable');
-
-    const updated = await this.prisma.livre.update({
       where: { id },
-      data: {
-        ...(data.titre && { titre: data.titre }),
-        ...(data.auteur !== undefined && { auteur: data.auteur || null }),
-        ...(data.resume !== undefined && { resume: data.resume }),
-        ...(data.prix && { prix: data.prix }),
-        ...(data.statut && { statut: data.statut }),
-        ...(data.categorieId !== undefined && {
-          categorieId: data.categorieId,
-        }),
+      select: {
+        id: true,
+        titre: true,
+        auteur: true,
+        resume: true,
+        prix: true,
+        devise: true,
+        format: true,
+        nombrePages: true,
+        anneePublication: true,
+        statut: true,
+        couvertureUrl: true,
+        createdAt: true,
+        deletedAt: true,
+        categorie: { select: { id: true, nom: true } },
       },
     });
-    return { ...updated, prix: Number(updated.prix) };
+    if (!livre) throw new NotFoundException('Livre introuvable');
+    return { ...livre, prix: Number(livre.prix) };
+  }
+
+  async modifierLivre(
+    id: string,
+    data: ModifierLivreDto,
+    fichier?: Express.Multer.File,
+    couverture?: Express.Multer.File,
+  ) {
+    const livre = await this.prisma.livre.findFirst({ where: { id } });
+    if (!livre) throw new NotFoundException('Livre introuvable');
+
+    try {
+      let fichierUrl = livre.fichierUrl;
+      let fichierPublicId = livre.fichierPublicId;
+      if (fichier) {
+        const upload = await this.cloudinary.uploadPdf(
+          fichier.buffer,
+          fichier.originalname,
+        );
+        fichierUrl = upload.secureUrl;
+        fichierPublicId = upload.publicId;
+      }
+
+      let couvertureUrl = livre.couvertureUrl;
+      if (couverture) {
+        const img = await this.cloudinary.uploadImage(
+          couverture.buffer,
+          couverture.originalname,
+        );
+        couvertureUrl = img.url;
+      }
+
+      const updated = await this.prisma.livre.update({
+        where: { id },
+        data: {
+          ...(data.titre !== undefined && { titre: data.titre }),
+          ...(data.auteur !== undefined && { auteur: data.auteur || null }),
+          ...(data.resume !== undefined && { resume: data.resume }),
+          ...(data.prix !== undefined && { prix: data.prix }),
+          ...(data.devise !== undefined && { devise: data.devise }),
+          ...(data.format !== undefined && { format: data.format }),
+          ...(data.nombrePages !== undefined && {
+            nombrePages: data.nombrePages,
+          }),
+          ...(data.anneePublication !== undefined && {
+            anneePublication: data.anneePublication,
+          }),
+          ...(data.statut !== undefined && { statut: data.statut }),
+          ...(fichier && { fichierUrl, fichierPublicId }),
+          ...(couverture && { couvertureUrl }),
+        },
+        select: {
+          id: true,
+          titre: true,
+          prix: true,
+          statut: true,
+          couvertureUrl: true,
+        },
+      });
+      return { ...updated, prix: Number(updated.prix) };
+    } catch (err) {
+      this.logger.error(
+        `Échec modification livre ${id} : ${err instanceof Error ? err.message : err}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      if (err instanceof BadRequestException) throw err;
+      const detail =
+        err instanceof Error ? err.message : 'Erreur inconnue';
+      throw new BadRequestException(
+        `Modification impossible : ${detail}. Vérifiez le format des fichiers.`,
+      );
+    }
   }
 
   async supprimerLivre(id: string) {
@@ -216,6 +292,23 @@ export class AdminService {
 
   creerCategorie(dto: CreerCategorieDto) {
     return this.prisma.categorie.create({ data: dto });
+  }
+
+  async modifierCategorie(id: string, dto: ModifierCategorieDto) {
+    const cat = await this.prisma.categorie.findFirst({ where: { id } });
+    if (!cat) throw new NotFoundException('Catégorie introuvable');
+    if (!dto.nom?.trim() && dto.description === undefined) {
+      throw new BadRequestException('Aucune modification fournie');
+    }
+    return this.prisma.categorie.update({
+      where: { id },
+      data: {
+        ...(dto.nom !== undefined && { nom: dto.nom.trim() }),
+        ...(dto.description !== undefined && {
+          description: dto.description || null,
+        }),
+      },
+    });
   }
 
   listerLivresAdmin() {

@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { InscriptionDto } from './dto/inscription.dto';
 import { ConnexionDto } from './dto/connexion.dto';
 import { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
+import { ModifierProfilDto } from './dto/modifier-profil.dto';
 import { SupprimerCompteDto } from './dto/supprimer-compte.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -25,6 +26,15 @@ export class AuthController {
   @Get('moi')
   moi(@CurrentUser() user: { sub: string }) {
     return this.auth.profil(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profil')
+  modifierProfil(
+    @CurrentUser() user: { sub: string },
+    @Body() dto: ModifierProfilDto,
+  ) {
+    return this.auth.modifierProfil(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard)
